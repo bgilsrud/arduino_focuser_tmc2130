@@ -1,55 +1,95 @@
-// Moonlite-compatible stepper controller
-//
-// Uses AccelStepper (http://www.airspayce.com/mikem/arduino/AccelStepper/)
-//
-// Inspired by (http://orlygoingthirty.blogspot.co.nz/2014/04/arduino-based-motor-focuser-controller.html)
-// orly.andico@gmail.com, 13 April 2014
-//
-// Modified for INDI, easydriver by Cees Lensink
-// Added sleep function by Daniel Franzén
+/*
+  Moonlite-compatible focuser controller
 
+  ** Version 2.0 **
+    Modified to be used with the cheaper DRV8825 (or A4988) driver and almost completely rewritten by SquareBoot
+
+  ** Version 1.0 **
+    Inspired by (http://orlygoingthirty.blogspot.co.nz/2014/04/arduino-based-motor-focuser-controller.html)
+    Modified for INDI, easydriver by Cees Lensink
+    Added sleep function by Daniel Franzén
+*/
+
+// Firmware version - 2.0
+const String VERSION = "20";
+
+// Configuration
+#include "Config.h"
+
+// AVR libraries
+#include <avr/io.h>                                       // AVR library
+#include <avr/wdt.h>                                      // Watchdog timer
+#define reboot() wdt_enable(WDTO_30MS); while(1) {}       // To reset the board, call reboot();
+
+// Stepper driver libraries
+// AccelStepper, used to provide motor acceleration
 #include <AccelStepper.h>
+// Driver-specific definitions
+#include <BasicStepperDriver.h>
+#if STEPPER_TYPE == STEPPER_A4988
+#include <A4988.h>
+#endif
+#if STEPPER_TYPE == STEPPER_DRV8825
+#include <DRV8825.h>
+#endif
+#if STEPPER_TYPE == STEPPER_DRV8834
+#include <DRV8834.h>
+#endif
 
-int stepperPin = 3;
-int dirPin = 2;
-int powerPin = 4;
-boolean useSleep = true; // true = use sleep pin, false = use enable pin
-int ledPin = 13;
-
-// Maximum speed is 160pps which should be OK for most tin can steppers
-#define MAXSPEED 160
-#define SPEEDMULT 3
-
-AccelStepper stepper(1, stepperPin, dirPin);
-
-#define MAXCOMMAND 8
-
-char inChar;
-char cmd[MAXCOMMAND];
-char param[MAXCOMMAND];
-char line[MAXCOMMAND];
-long pos;
-int eoc = 0;
-int idx = 0;
-boolean isRunning = false;
-boolean powerIsOn = false;
-long timerStartTime = 0;
+#if STEPPER_TYPE == STEPPER_GENERIC
+STEPPER_TYPE driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP);
+#elif STEPPER_TYPE == STEPPER_DRV8834
+STEPPER_TYPE driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, DRIVER_M0, DRIVER_M1);
+#else
+STEPPER_TYPE driver(STEPS_REV, DRIVER1_DIR, DRIVER_STEP, DRIVER_M0, DRIVER_M1, DRIVER_M2);
+#endif
+// Motor control wrappers
+// Forward step
+void goForward() {
+  driver.move(1);
+}
+// Backward step
+void goBackward() {
+  driver.move(-1);
+}
+// AccelStepper object allocation
+AccelStepper stepper(goForward, goBackward);
 
 //Define the period to wait before turning power off (in milliseconds)
-const int activeTimePeriod = 30000;
+#define TIMER_DELAY 30000
 
+#define CMD_LENGHT 8
+
+boolean isRunning = false;
+boolean isPowerOn = false;
+
+// Used to interpret the MoonLite protocol
+char inChar;
+char cmd[CMD_LENGHT];
+char param[CMD_LENGHT];
+char line[CMD_LENGHT];
+boolean eoc = false;
+int idx = 0;
+long timerStartTime = 0;
 char tempString[10];
 
-
 void setup() {
-  Serial.begin(9600);
-  pinMode(powerPin, OUTPUT);
-  // Ignore the Moonlite speed setting because Accelstepper implements ramping, making variable speeds un-necessary
-  stepper.setSpeed(MAXSPEED);
-  stepper.setMaxSpeed(MAXSPEED);
-  stepper.setAcceleration(50);
+  // Serial connection
+  Serial.begin(SERIAL_SPEED);
+  // Status LED
+  pinMode(LED, OUTPUT);
+
+  // Motor driver setup
+  driver.setMicrostep(MICROSTEPS);
+  // Ignore Moonlite speed
+  driver.setRPM(MOTOR_RPM);
+  //stepper.setSpeed(MOTOR_PPS);
+  //stepper.setMaxSpeed(MOTOR_PPS);
+  stepper.setAcceleration(MOTOR_ACCEL);
+
   turnOff();
-  memset(line, 0, MAXCOMMAND);
+
+  memset(line, 0, CMD_LENGHT);
 }
 
 void loop() {
@@ -57,14 +97,14 @@ void loop() {
   if (isRunning) {
     stepper.run();
     if (stepper.distanceToGo() == 0) {
-      //start timer to decide when to power off the board.
+      // Start timer to decide when to power off the board
       timerStartTime = millis();
       isRunning = false;
     }
-    
-  } else if (powerIsOn) {
-    // Turn power off if active time period has passed.
-    if (millis() - timerStartTime > activeTimePeriod) {
+
+  } else if (isPowerOn) {
+    // Turn power off if active time period has passed
+    if (millis() - timerStartTime > TIMER_DELAY) {
       turnOff();
     }
   }
@@ -74,35 +114,35 @@ void loop() {
     inChar = Serial.read();
     if (inChar != '#' && inChar != ':') {
       line[idx++] = inChar;
-      if (idx >= MAXCOMMAND) {
-        idx = MAXCOMMAND - 1;
+      if (idx >= CMD_LENGHT) {
+        idx = CMD_LENGHT - 1;
       }
-      
+
     } else {
       if (inChar == '#') {
-        eoc = 1;
+        eoc = true;
       }
     }
   }
-  // We may not have a complete command yet but there is no character coming in for now and might as well loop in case stepper needs updating
+
+  // We may not have a complete command set but there is no character coming in for now and might as well loop in case stepper needs updating
   // eoc will flag if a full command is there to act upon
 
   // Process the command we got
   if (eoc) {
-    memset(cmd, 0, MAXCOMMAND);
-    memset(param, 0, MAXCOMMAND);
+    memset(cmd, 0, CMD_LENGHT);
+    memset(param, 0, CMD_LENGHT);
 
     int len = strlen(line);
     if (len >= 2) {
       strncpy(cmd, line, 2);
     }
-
     if (len > 2) {
       strncpy(param, line + 2, len - 2);
     }
 
-    memset(line, 0, MAXCOMMAND);
-    eoc = 0;
+    memset(line, 0, CMD_LENGHT);
+    eoc = false;
     idx = 0;
 
     // Execute the command
@@ -148,24 +188,22 @@ void loop() {
     if (!strcasecmp(cmd, "GI")) {
       if (stepper.distanceToGo() == 0) {
         Serial.print("00#");
-      }
-      else {
+
+      } else {
         Serial.print("01#");
       }
     }
 
     // Returns the new position previously set by a ":SNYYYY" command where YYYY is a four-digit unsigned hex number.
     if (!strcasecmp(cmd, "GN")) {
-      pos = stepper.targetPosition();
-      sprintf(tempString, "%04X", pos);
+      sprintf(tempString, "%04X", stepper.targetPosition());
       Serial.print(tempString);
       Serial.print("#");
     }
 
     // Returns the current position where YYYY is a four-digit unsigned hex number.
     if (!strcasecmp(cmd, "GP")) {
-      pos = stepper.currentPosition();
-      sprintf(tempString, "%04X", pos);
+      sprintf(tempString, "%04X", stepper.currentPosition());
       Serial.print(tempString);
       Serial.print("#");
     }
@@ -177,43 +215,41 @@ void loop() {
 
     // Get the version of the firmware as a two-digit decimal number where the first digit is the major version number, and the second digit is the minor version number.
     if (!strcasecmp(cmd, "GV")) {
-      Serial.print("10#");
+      Serial.print(VERSION + '#');
     }
 
     // Set the new temperature coefficient where XX is a two-digit, signed (2’s complement) hex number.
     if (!strcasecmp(cmd, "SC")) {
-    
+
     }
 
     // Set the new stepping delay where XX is a two-digit,unsigned hex number.
     if (!strcasecmp(cmd, "SD")) {
-    
+
     }
 
     // Set full-step mode.
     if (!strcasecmp(cmd, "SF")) {
-     
+
     }
 
     // Set half-step mode.
     if (!strcasecmp(cmd, "SH")) {
-      
+
     }
 
     // Set the new position where YYYY is a four-digit
     if (!strcasecmp(cmd, "SN")) {
-      pos = hexToLong(param);
-      // stepper.enableOutputs(); // Turn the motor on here ??
+      // stepper.enableOutputs(); // Turn the motor on here?
       if (!isRunning) {
         turnOn();
       }
-      stepper.moveTo(pos);
+      stepper.moveTo(hexToLong(param));
     }
 
-    // Set the current position where YYYY is a four-digit unsigned hex number.
+    // Set the current position, where YYYY is a four-digit unsigned hex number.
     if (!strcasecmp(cmd, "SP")) {
-      pos = hexToLong(param);
-      stepper.setCurrentPosition(pos);
+      stepper.setCurrentPosition(hexToLong(param));
     }
   }
 }
@@ -223,25 +259,15 @@ long hexToLong(char *line) {
 }
 
 void turnOn() {
-  if (useSleep) {
-    digitalWrite(powerPin, HIGH);
-    
-  } else {
-    digitalWrite(powerPin, LOW);
-  }
-  digitalWrite(ledPin, HIGH);
+  driver.enable();
+  digitalWrite(LED, HIGH);
   isRunning = true;
-  powerIsOn = true;
+  isPowerOn = true;
 }
 
 void turnOff() {
-  if (useSleep) {
-    digitalWrite(powerPin, LOW);
-    
-  } else {
-    digitalWrite(powerPin, HIGH);
-  }
-  digitalWrite(ledPin, LOW);
+  driver.disable();
+  digitalWrite(LED, LOW);
   isRunning = false;
-  powerIsOn = false;
+  isPowerOn = false;
 }
