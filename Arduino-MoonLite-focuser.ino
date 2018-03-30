@@ -1,6 +1,9 @@
 /*
   Moonlite-compatible focuser controller
 
+  ** Version 2.1 **
+    Added function to set pin value.
+
   ** Version 2.0 **
     Modified to be used with the cheaper DRV8825 (or A4988) driver and almost completely rewritten by SquareBoot
 
@@ -10,8 +13,8 @@
     Added sleep function by Daniel Franzén
 */
 
-// Firmware version - 2.0
-const String VERSION = "20";
+// Firmware version - 2.1
+const String VERSION = "21";
 
 // Configuration
 #include "Config.h"
@@ -78,6 +81,14 @@ void setup() {
   Serial.begin(SERIAL_SPEED);
   // Status LED
   pinMode(LED, OUTPUT);
+  
+  digitalWrite(LED, HIGH);
+  delay(100);
+  digitalWrite(LED, LOW);
+  delay(100);
+  digitalWrite(LED, HIGH);
+  delay(100);
+  digitalWrite(LED, LOW);
 
   // Motor driver setup
   driver.setMicrostep(MICROSTEPS);
@@ -133,6 +144,18 @@ void loop() {
     memset(cmd, 0, CMD_LENGHT);
     memset(param, 0, CMD_LENGHT);
 
+    // Set the value of a pin
+    if ((line[0] == 'A') && (line[1] == 'V')) {
+      String pin = "";
+      pin.concat(line[2]);
+      pin.concat(line[3]);
+      String value = "";
+      value.concat(line[4]);
+      value.concat(line[5]);
+      value.concat(line[6]);
+      analogWrite(pin.toInt(), value.toInt());
+    }
+
     int len = strlen(line);
     if (len >= 2) {
       strncpy(cmd, line, 2);
@@ -146,6 +169,10 @@ void loop() {
     idx = 0;
 
     // Execute the command
+
+    if (!strcasecmp(cmd, "RS")) {
+      reboot();
+    }
 
     // Immediately stop any focus motor movement. Returns nothing
     if (!strcasecmp(cmd, "FQ")) {
@@ -173,7 +200,7 @@ void loop() {
     }
 
     // Returns the current stepping delay where XX is a two-digit unsigned  number. See the :SD# command for a list of possible return values.
-    // might turn this into AccelStepper acceleration at some point
+    // Might turn this into AccelStepper acceleration at some point
     if (!strcasecmp(cmd, "GD")) {
       Serial.print("02#");
     }
