@@ -19,7 +19,7 @@
 // RPM. Decreasing this value should decrease telescope shaking.
 #define MOTOR_RPM 120
 // Acceleration
-#define MOTOR_ACCEL 1000
+#define MOTOR_ACCEL 1200
 // Motor pulses per second (pps). See full formula here: https://electronics.stackexchange.com/a/232679
 // #define MOTOR_PPS (MOTOR_RPM * STEPS_REV / 60)
 // ----- Driver pins -----

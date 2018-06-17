@@ -221,9 +221,13 @@ void loop() {
       value.concat(line[4]);
       value.concat(line[5]);
       value.concat(line[6]);
-      Serial.println(pin.toInt());
-      Serial.println(value.toInt());
-      analogWrite(pin.toInt(), value.toInt());
+      int p = pin.toInt();
+      for (int i = 0; i < (sizeof(customPins) / sizeof(*customPins)); i++) {
+        if (customPins[i] == p) {
+          analogWrite(p, value.toInt());
+          break;
+        }
+      }
     }
 
     int len = strlen(line);

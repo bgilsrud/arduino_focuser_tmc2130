@@ -10,7 +10,7 @@ a stepper motor that moves the focuser knob using a belt.
 There are also MOSFETS (think of them like relays) that are able to
 control dew heaters or fans to cool your primary mirror.
 
-<img align="left" src="Docs/SCH.png"><br>
+<img align="center" src="Docs/SCH.png"><br>
 
 ### AstroAllInOne
 <a href="https://github.com/SquareBoot/AstroAllInOne">AstroAllInOne</a>
@@ -18,9 +18,9 @@ is this firmware's companion INDI driver that allows the end user to
 change the state of **every** pin of the board (pay attention! **do not change the
 state of the stepper motor driver's pins**). Refer to its documentation on
 how to configure it. Without AstroAllInOne, the Arduino will behave just like
-a generic MoonLite focuser.
+a generic MoonLite focuser.<br>
 
-<img align="left" src="Docs/1.jpg"><br>
+<img align="right" src="Docs/1.jpg" width="350" >
 
 ### Autodesk Eagle project
 In the "Eagle" directory there is the full circuit project, both schematics and PCB. 
@@ -28,9 +28,9 @@ It's the one I use for my telescope, but of course you can modify it to
 accomplish your necessities: for instance, you could add another dew heater port, 
 or remove the Newton mirror cooler MOSFET. Refer to the AstroAllInOne readme on 
 how to define new digital or PWM pins definitions.
-<br>**Made with Eagle 9.0.1 Premium**
+<br>**Made with Eagle 9.0.1 Premium**<br>
 
-<img align="left" src="Brackets/Sky-Watcher Newton Crayford/3.jpg">
+<img align="left" src="Brackets/Sky-Watcher Newton Crayford/3.jpg" width="300" >
 
 ### Mounting brackets
 Also includes mounting brackets for the common SkyWatcher 
