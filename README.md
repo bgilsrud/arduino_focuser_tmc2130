@@ -1,6 +1,3 @@
-**I'll add photos of the completed focuser as soon as the 3D printing
-service will deliver the bracket!**
-
 # Arduino-based telescope focuser controller
 Simple MoonLite-compatible focuser controller. Thought to be used with INDI.
 Does not support temperature compensation yet (feel free to fork!).
@@ -13,7 +10,7 @@ a stepper motor that moves the focuser knob using a belt.
 There are also MOSFETS (think of them like relays) that are able to
 control dew heaters or fans to cool your primary mirror.
 
-<img align="left" src="Docs/SCH.png">
+<img align="left" src="Docs/SCH.png"><br>
 
 ### AstroAllInOne
 <a href="https://github.com/SquareBoot/AstroAllInOne">AstroAllInOne</a>
@@ -23,13 +20,17 @@ state of the stepper motor driver's pins**). Refer to its documentation on
 how to configure it. Without AstroAllInOne, the Arduino will behave just like
 a generic MoonLite focuser.
 
+<img align="left" src="Docs/1.jpg"><br>
+
 ### Autodesk Eagle project
 In the "Eagle" directory there is the full circuit project, both schematics and PCB. 
 It's the one I use for my telescope, but of course you can modify it to 
 accomplish your necessities: for instance, you could add another dew heater port, 
 or remove the Newton mirror cooler MOSFET. Refer to the AstroAllInOne readme on 
 how to define new digital or PWM pins definitions.
-<br>**Made with Eagle 8.7.1 Premium**
+<br>**Made with Eagle 9.0.1 Premium**
+
+<img align="left" src="Brackets/Sky-Watcher Newton Crayford/3.jpg">
 
 ### Mounting brackets
 Also includes mounting brackets for the common SkyWatcher 

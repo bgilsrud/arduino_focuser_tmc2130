@@ -1,6 +1,9 @@
 /*
   Moonlite-compatible focuser controller
 
+  ** Version 2.2 **
+    Bugs fixed, general changes.
+
   ** Version 2.1 **
     Added function to set pin value.
 
@@ -13,59 +16,98 @@
     Added sleep function by Daniel Franzén
 */
 
-// Firmware version - 2.1
-const String VERSION = "21";
+// Firmware version - 2.2
+const String VERSION = "22";
 
 // Configuration
 #include "Config.h"
 
 // AVR libraries
+#if ENABLE_SW_RS == true
 #include <avr/io.h>                                       // AVR library
 #include <avr/wdt.h>                                      // Watchdog timer
 #define reboot() wdt_enable(WDTO_30MS); while(1) {}       // To reset the board, call reboot();
+#endif
 
 // Stepper driver libraries
 // AccelStepper, used to provide motor acceleration
 #include <AccelStepper.h>
-// Driver-specific definitions
+#if STEPPER_TYPE == 0
 #include <BasicStepperDriver.h>
-#if STEPPER_TYPE == STEPPER_A4988
-#include <A4988.h>
-#endif
-#if STEPPER_TYPE == STEPPER_DRV8825
+#elif STEPPER_TYPE == 1
 #include <DRV8825.h>
-#endif
-#if STEPPER_TYPE == STEPPER_DRV8834
+#elif STEPPER_TYPE == 2
+#include <A4988.h>
+#elif STEPPER_TYPE == 3
 #include <DRV8834.h>
 #endif
 
-#if STEPPER_TYPE == STEPPER_GENERIC
-STEPPER_TYPE driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP);
-#elif STEPPER_TYPE == STEPPER_DRV8834
-STEPPER_TYPE driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, DRIVER_M0, DRIVER_M1);
-#else
-STEPPER_TYPE driver(STEPS_REV, DRIVER1_DIR, DRIVER_STEP, DRIVER_M0, DRIVER_M1, DRIVER_M2);
+// The period to wait before turning off the driver (in milliseconds)
+boolean isRunning = false;
+#ifdef DRIVER_EN
+#define TIMER_DELAY 30000
+boolean isPowerOn = false;
 #endif
-// Motor control wrappers
+#if STEPPER_TYPE != 0
+boolean isHalfStep = false;
+#endif
+
+#ifdef DRIVER_EN
+#if STEPPER_TYPE == 0
+BasicStepperDriver driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, DRIVER_EN);
+#elif STEPPER_TYPE == 1
+DRV8825 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2, DRIVER_EN);
+#elif STEPPER_TYPE == 2
+A4988 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2, DRIVER_EN);
+#elif STEPPER_TYPE == 3
+DRV8834 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, DRIVER_EN);
+#endif
+#else
+#if STEPPER_TYPE == 0
+BasicStepperDriver driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP);
+#elif STEPPER_TYPE == 1
+DRV8825 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2);
+#elif STEPPER_TYPE == 2
+A4988 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2);
+#elif STEPPER_TYPE == 3
+DRV8834 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1);
+#endif
+#endif
+
+// ----- Motor control wrappers -----
 // Forward step
 void goForward() {
-  driver.move(1);
+  int n = SINGLE_STEP;
+#if STEPPER_TYPE != 0
+  if (isHalfStep) {
+    n *= HALF_STEP;
+
+  } else {
+    n *= FULL_STEP;
+  }
+#endif
+  driver.move(n);
 }
 // Backward step
 void goBackward() {
-  driver.move(-1);
-}
-// AccelStepper object allocation
-AccelStepper stepper(goForward, goBackward);
+  int n = SINGLE_STEP;
+#if STEPPER_TYPE != 0
+  if (isHalfStep) {
+    n *= HALF_STEP;
 
-//Define the period to wait before turning power off (in milliseconds)
-#define TIMER_DELAY 30000
+  } else {
+    n *= FULL_STEP;
+  }
+#endif
+  driver.move(-n);
+}
+#if REVERSE_DIR == false
+AccelStepper stepper(goForward, goBackward);
+#else
+AccelStepper stepper(goBackward, goForward);
+#endif
 
 #define CMD_LENGHT 8
-
-boolean isRunning = false;
-boolean isPowerOn = false;
-
 // Used to interpret the MoonLite protocol
 char inChar;
 char cmd[CMD_LENGHT];
@@ -76,30 +118,37 @@ int idx = 0;
 long timerStartTime = 0;
 char tempString[10];
 
+int customPins[] = CUSTOMIZABLE_PINS;
+#define BLINK_PERIOD 300
+boolean ledState = false;
+long blinkStartTime = 0;
+
 void setup() {
   // Serial connection
   Serial.begin(SERIAL_SPEED);
   // Status LED
   pinMode(LED, OUTPUT);
-  
-  digitalWrite(LED, HIGH);
-  delay(100);
-  digitalWrite(LED, LOW);
-  delay(100);
-  digitalWrite(LED, HIGH);
-  delay(100);
-  digitalWrite(LED, LOW);
+  // Customizable pins
+  for (int i = 0; i < (sizeof(customPins) / sizeof(*customPins)); i++) {
+    pinMode(customPins[i], OUTPUT);
+  }
+  // Polar finder light
+#if ENABLE_POLAR_LIGHT == true
+  pinMode(POLAR_LIGHT_LED, OUTPUT);
+#endif
 
-  // Motor driver setup
-  driver.setMicrostep(MICROSTEPS);
+  // ----- Motor driver -----
   // Ignore Moonlite speed
   driver.setRPM(MOTOR_RPM);
   //stepper.setSpeed(MOTOR_PPS);
   //stepper.setMaxSpeed(MOTOR_PPS);
   stepper.setAcceleration(MOTOR_ACCEL);
-
+#if STEPPER_TYPE != 0
+  driver.setMicrostep(FULL_STEP);
+#endif
   turnOff();
 
+  blinkStartTime = millis();
   memset(line, 0, CMD_LENGHT);
 }
 
@@ -112,13 +161,33 @@ void loop() {
       timerStartTime = millis();
       isRunning = false;
     }
-
-  } else if (isPowerOn) {
+  }
+#ifdef DRIVER_EN
+  else if (isPowerOn) {
     // Turn power off if active time period has passed
-    if (millis() - timerStartTime > TIMER_DELAY) {
+    if (millis() - timerStartTime >= TIMER_DELAY) {
       turnOff();
     }
   }
+#endif
+  else {
+    unsigned long currentMillis = millis();
+    if (currentMillis - blinkStartTime >= BLINK_PERIOD) {
+      blinkStartTime = currentMillis;
+      ledState = !ledState;
+      digitalWrite(LED, ledState);
+    }
+  }
+
+#if ENABLE_POLAR_LIGHT == true
+  int val = analogRead(POT_ANALOG_PIN);
+  if (val > 20) {
+    analogWrite(POLAR_LIGHT_LED, map(val, 20, 1023, 0, 250));
+
+  } else {
+    analogWrite(POLAR_LIGHT_LED, 0);
+  }
+#endif
 
   // Read the command until the terminating # character
   while (Serial.available() && !eoc) {
@@ -136,9 +205,8 @@ void loop() {
     }
   }
 
-  // We may not have a complete command set but there is no character coming in for now and might as well loop in case stepper needs updating
+  // We may not have a complete command set but there is no character coming in for now and mightas well loop in case stepper needs updating
   // eoc will flag if a full command is there to act upon
-
   // Process the command we got
   if (eoc) {
     memset(cmd, 0, CMD_LENGHT);
@@ -153,6 +221,8 @@ void loop() {
       value.concat(line[4]);
       value.concat(line[5]);
       value.concat(line[6]);
+      Serial.println(pin.toInt());
+      Serial.println(value.toInt());
       analogWrite(pin.toInt(), value.toInt());
     }
 
@@ -170,19 +240,21 @@ void loop() {
 
     // Execute the command
 
+#if ENABLE_SW_RS == true
     if (!strcasecmp(cmd, "RS")) {
       reboot();
     }
+#endif
 
     // Immediately stop any focus motor movement. Returns nothing
     if (!strcasecmp(cmd, "FQ")) {
       if (!isRunning) {
         turnOn();
       }
-      // Stop as fast as possible: sets new target
+      // Stop as fast as possible
       stepper.stop();
+      // Blocks until the target position is reached and stopped
       stepper.runToPosition();
-      // Now stopped after quickstop
     }
 
     // Go to the new position as set by the ":SNYYYY#" command. Returns nothing.
@@ -207,7 +279,16 @@ void loop() {
 
     // Returns "FF#" if the focus motor is half-stepped otherwise return "00#"
     if (!strcasecmp(cmd, "GH")) {
+#if STEPPER_TYPE != 0
+      if (isHalfStep) {
+        Serial.print("FF#");
+
+      } else {
+        Serial.print("00#");
+      }
+#else
       Serial.print("00#");
+#endif
     }
 
     // Returns "00#" if the focus motor is not moving, otherwise return "01#",
@@ -256,14 +337,20 @@ void loop() {
     }
 
     // Set full-step mode.
+#if STEPPER_TYPE != 0
     if (!strcasecmp(cmd, "SF")) {
-
+      driver.setMicrostep(FULL_STEP);
+      isHalfStep = false;
     }
+#endif
 
     // Set half-step mode.
+#if STEPPER_TYPE != 0
     if (!strcasecmp(cmd, "SH")) {
-
+      driver.setMicrostep(HALF_STEP);
+      isHalfStep = true;
     }
+#endif
 
     // Set the new position where YYYY is a four-digit
     if (!strcasecmp(cmd, "SN")) {
@@ -286,15 +373,18 @@ long hexToLong(char *line) {
 }
 
 void turnOn() {
+#ifdef DRIVER_EN
   driver.enable();
+  isPowerOn = true;
+#endif
   digitalWrite(LED, HIGH);
   isRunning = true;
-  isPowerOn = true;
 }
 
 void turnOff() {
+#ifdef DRIVER_EN
   driver.disable();
-  digitalWrite(LED, LOW);
-  isRunning = false;
   isPowerOn = false;
+#endif
+  isRunning = false;
 }
