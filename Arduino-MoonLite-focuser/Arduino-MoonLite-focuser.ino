@@ -244,11 +244,15 @@ void loop() {
 
     // Execute the command
 
-#if ENABLE_SW_RS == true
     if (!strcasecmp(cmd, "RS")) {
+#if ENABLE_SW_RS == true
       reboot();
-    }
+#else
+      for (int i = 0; i < (sizeof(customPins) / sizeof(*customPins)); i++) {
+        analogWrite(customPins[i], 0);
+      }
 #endif
+    }
 
     // Immediately stop any focus motor movement. Returns nothing
     if (!strcasecmp(cmd, "FQ")) {

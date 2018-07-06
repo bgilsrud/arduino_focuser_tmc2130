@@ -2,7 +2,7 @@
 // Status LED pin
 #define LED 13
 #define SERIAL_SPEED 115200
-#define ENABLE_SW_RS true
+#define ENABLE_SW_RS false
 
 // ----- Stepper driver configuration -----
 // Motor driver type: BasicStepperDriver (0), DRV8825 (1), A4988 (2) or DRV8834 (3)
@@ -19,7 +19,7 @@
 // RPM. Decreasing this value should decrease telescope shaking.
 #define MOTOR_RPM 120
 // Acceleration
-#define MOTOR_ACCEL 1200
+#define MOTOR_ACCEL 1300
 // Motor pulses per second (pps). See full formula here: https://electronics.stackexchange.com/a/232679
 // #define MOTOR_PPS (MOTOR_RPM * STEPS_REV / 60)
 // ----- Driver pins -----
