@@ -1,5 +1,3 @@
-View this project on [CADLAB.io](https://cadlab.io/project/1407). 
-
 # Arduino-based telescope focuser controller
 Simple MoonLite-compatible focuser controller. Thought to be used with INDI.
 Does not support temperature compensation yet (feel free to fork!).
