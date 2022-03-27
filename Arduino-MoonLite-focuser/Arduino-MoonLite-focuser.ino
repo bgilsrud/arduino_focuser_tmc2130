@@ -22,6 +22,7 @@ const String VERSION = "22";
 // Configuration
 #include "Config.h"
 
+
 // AVR libraries
 #if ENABLE_SW_RS == true
 #include <avr/io.h>                                       // AVR library
@@ -40,6 +41,8 @@ const String VERSION = "22";
 #include <A4988.h>
 #elif STEPPER_TYPE == 3
 #include <DRV8834.h>
+#elif STEPPER_TYPE == 4
+#include <TMCStepperDriver.h>
 #endif
 
 // The period to wait before turning off the driver (in milliseconds)
@@ -61,6 +64,10 @@ DRV8825 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2, DRIVER_E
 A4988 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2, DRIVER_EN);
 #elif STEPPER_TYPE == 3
 DRV8834 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, DRIVER_EN);
+#elif STEPPER_TYPE == 4
+TMCStepperDriver driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, Axis1_CS, Axis1_SCK, Axis1_MISO, Axis1_MOSI);
+//BasicStepperDriver driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, DRIVER_EN);
+
 #endif
 #else
 #if STEPPER_TYPE == 0
@@ -71,6 +78,10 @@ DRV8825 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2);
 A4988 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1, MODE2);
 #elif STEPPER_TYPE == 3
 DRV8834 driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, MODE0, MODE1);
+#elif STEPPER_TYPE == 4
+TMCStepperDriver driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, Axis1_CS, Axis1_SCK, Axis1_MISO, Axis1_MOSI);
+//BasicStepperDriver driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP);
+
 #endif
 #endif
 
@@ -137,9 +148,13 @@ void setup() {
   pinMode(POLAR_LIGHT_LED, OUTPUT);
 #endif
 
+  //for (;;) Serial.println("hello");
   // ----- Motor driver -----
   // Ignore Moonlite speed
+
+  driver.setup();
   driver.setRPM(MOTOR_RPM);
+  //driver.begin(1,1);
   //stepper.setSpeed(MOTOR_PPS);
   //stepper.setMaxSpeed(MOTOR_PPS);
   stepper.setAcceleration(MOTOR_ACCEL);
@@ -269,7 +284,7 @@ void loop() {
       // Stop as fast as possible
       stepper.stop();
       // Blocks until the target position is reached and stopped
-      stepper.runToPosition();
+      //stepper.runToPosition();
     }
 
     // Go to the new position as set by the ":SNYYYY#" command. Returns nothing.
@@ -379,6 +394,11 @@ void loop() {
     // Set the current position, where YYYY is a four-digit unsigned hex number.
     if (!strcasecmp(cmd, "SP")) {
       stepper.setCurrentPosition(hexToLong(param));
+    }
+    if (!strcasecmp(cmd, "GS")) {
+      sprintf(tempString, "%08X", driver.status());
+      Serial.print(tempString);
+      Serial.print("#");
     }
   }
 }
