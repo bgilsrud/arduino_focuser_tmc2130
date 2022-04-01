@@ -7,19 +7,20 @@
 #define ENABLE_SW_RS false
 
 // ----- Stepper driver configuration -----
-#define STEPS_REV 800
+#define STEPS_REV 2038
+#define GEAR_RATIO (90/14)
 // Motor driver type: BasicStepperDriver (0), DRV8825 (1), A4988 (2), DRV8834 (3), or TMC2130 (4)
 #define STEPPER_TYPE 4
 // Steps per revolution
 #define SINGLE_STEP 1
 // Ignored for BasicStepperDriver. Can be 1, 2, 4, 8, 16 or 32
-#define FULL_STEP 16
+#define FULL_STEP 1
 // Ignored for BasicStepperDriver. Can be 1, 2, 4, 8, 16, 32, 64, 128, or 256
-#define HALF_STEP 32
+#define HALF_STEP 2
 // Reverses the direction of the motor
 #define REVERSE_DIR false
 // RPM. Decreasing this value should decrease telescope shaking.
-#define MOTOR_RPM 120
+#define MOTOR_RPM 20
 // Acceleration
 #define MOTOR_ACCEL 100
 // Motor pulses per second (pps). See full formula here: https://electronics.stackexchange.com/a/232679
@@ -54,6 +55,6 @@
 #define Axis1_MISO          PA6 //16     // SPI MISO
 #define Axis1_STEP          PB10 //21     // Step
 #define Axis1_DIR           PB2 //20     // Dir
-#define Axis1_IRUN          1000
+#define Axis1_IRUN          200
 
 #endif

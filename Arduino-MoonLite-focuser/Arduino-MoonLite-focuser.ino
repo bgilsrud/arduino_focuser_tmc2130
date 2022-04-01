@@ -16,6 +16,8 @@
     Added sleep function by Daniel Franzén
 */
 
+#include <Arduino.h>
+
 // Firmware version - 2.2
 const String VERSION = "22";
 
@@ -84,6 +86,16 @@ TMCStepperDriver driver(STEPS_REV, DRIVER_DIR, DRIVER_STEP, Axis1_CS, Axis1_SCK,
 
 #endif
 #endif
+
+long ml_to_stepper_pos(long ml)
+{
+    return ml * GEAR_RATIO;
+}
+
+long stepper_to_ml_pos(long stepper)
+{
+    return stepper / GEAR_RATIO;
+}
 
 // ----- Motor control wrappers -----
 // Forward step
@@ -158,6 +170,7 @@ void setup() {
   //stepper.setSpeed(MOTOR_PPS);
   //stepper.setMaxSpeed(MOTOR_PPS);
   stepper.setAcceleration(MOTOR_ACCEL);
+  stepper.setMaxSpeed(MOTOR_RPM * STEPS_REV / 60);
 #if STEPPER_TYPE != 0
   driver.setMicrostep(FULL_STEP);
 #endif
@@ -334,14 +347,14 @@ void loop() {
 
     // Returns the new position previously set by a ":SNYYYY" command where YYYY is a four-digit unsigned hex number.
     if (!strcasecmp(cmd, "GN")) {
-      sprintf(tempString, "%04X", stepper.targetPosition());
+      sprintf(tempString, "%04X", stepper_to_ml_pos(stepper.targetPosition()));
       Serial.print(tempString);
       Serial.print("#");
     }
 
     // Returns the current position where YYYY is a four-digit unsigned hex number.
     if (!strcasecmp(cmd, "GP")) {
-      sprintf(tempString, "%04X", stepper.currentPosition());
+      sprintf(tempString, "%04X", stepper_to_ml_pos(stepper.currentPosition()));
       Serial.print(tempString);
       Serial.print("#");
     }
@@ -388,12 +401,12 @@ void loop() {
       if (!isRunning) {
         turnOn();
       }
-      stepper.moveTo(hexToLong(param));
+      stepper.moveTo(ml_to_stepper_pos(hexToLong(param)));
     }
 
     // Set the current position, where YYYY is a four-digit unsigned hex number.
     if (!strcasecmp(cmd, "SP")) {
-      stepper.setCurrentPosition(hexToLong(param));
+      stepper.setCurrentPosition(ml_to_stepper_pos(hexToLong(param)));
     }
     if (!strcasecmp(cmd, "GS")) {
       sprintf(tempString, "%08X", driver.status());

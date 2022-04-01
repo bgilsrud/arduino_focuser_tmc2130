@@ -21,7 +21,7 @@ TMCStepperDriver::TMCStepperDriver(int steps, int dir_pin, int step_pin, int cs_
 
 void TMCStepperDriver::setup()
 {
-    tmc_spi.setup(true, STEALTHCHOP, 1, Axis1_IRUN, Axis1_IRUN * .8);
+    tmc_spi.setup(true, STEALTHCHOP, 1, Axis1_IRUN, Axis1_IRUN * .5);
 }
 
 /*
